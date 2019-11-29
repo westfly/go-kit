@@ -1,4 +1,4 @@
-module tgithub.com:bj-wangjia/go-kit
+module github.com:bj-wangjia/go-kit
 
 go 1.12
 
