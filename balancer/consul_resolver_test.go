@@ -23,7 +23,7 @@ func (l *MyLogger) Warnf(format string, v ...interface{}) {
 
 func TestConsulResolver(t *testing.T) {
 	myLogger := &MyLogger{log: logrus.New()}
-	r, err := NewConsulResolver("127.0.0.1:8500", "hatlonly-test-service", "my-service", 200*time.Millisecond, 0, 0.7)
+	r, err := NewConsulResolver("127.0.0.1:8500", "hatlonly-test-service", "my-service", 200*time.Millisecond, 0, 0.7, "")
 	r.SetLogger(myLogger)
 	if err != nil {
 		panic(err)
@@ -45,7 +45,7 @@ func TestConsulResolver(t *testing.T) {
 
 func TestConcurrency(t *testing.T) {
 	myLogger := &MyLogger{log: logrus.New()}
-	r, err := NewConsulResolver("127.0.0.1:8500", "hatlonly-test-service", "my-service", 200*time.Millisecond, 0, 0.7)
+	r, err := NewConsulResolver("127.0.0.1:8500", "hatlonly-test-service", "my-service", 200*time.Millisecond, 0, 0.7, "")
 	r.SetLogger(myLogger)
 	if err != nil {
 		panic(err)
