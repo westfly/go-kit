@@ -21,19 +21,20 @@ type ConsulResolverBuilder struct {
 	MyService    string
 	ServiceRatio float64
 	CPUThreshold float64
+	Zone         string
 }
 
 // Build a ConsulResolver
 func (b *ConsulResolverBuilder) Build() (*ConsulResolver, error) {
 	return NewConsulResolver(
-		b.Address, b.Service, b.MyService, b.Interval, b.ServiceRatio, b.CPUThreshold,
+		b.Address, b.Service, b.MyService, b.Interval, b.ServiceRatio, b.CPUThreshold, b.Zone,
 	)
 }
 
 // NewConsulResolver create a new ConsulResolver
 func NewConsulResolver(
 	address string, service string, myService string, interval time.Duration,
-	serviceRatio float64, cpuThreshold float64,
+	serviceRatio float64, cpuThreshold float64, zone string,
 ) (*ConsulResolver, error) {
 	config := api.DefaultConfig()
 	config.Address = address
@@ -51,7 +52,7 @@ func NewConsulResolver(
 		cpuThreshold: cpuThreshold,
 		done:         false,
 		cpuUsage:     50,
-		zone:         zone(),
+		zone:         zone,
 	}
 
 	if err := r.Start(); err != nil {
