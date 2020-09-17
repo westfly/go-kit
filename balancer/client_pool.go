@@ -69,8 +69,11 @@ func (pool *ClientPool) watch() {
 			pool.connPool.Range(func(key, val interface{}) bool {
 				if connWithTs, ok := val.(*ConnWithTs); ok {
 					if now-connWithTs.UpdateTime > 30 {
-						connWithTs.Conn.Close()
+						if connWithTs.Conn != nil {
+							connWithTs.Conn.Close()
+						}
 						pool.connPool.Delete(key)
+						
 					}
 				}
 				return true
