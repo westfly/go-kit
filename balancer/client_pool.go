@@ -5,42 +5,81 @@ import (
 	"errors"
 	"sync"
 	"time"
-
-	"google.golang.org/grpc"
 )
+
+type FactoryFn func(addr string) (interface{}, error)
+type CloseFn func(interface{}) error
+
+type Config struct {
+	Address      string
+	Service      string
+	RegService   string
+	Zone         string
+	ServiceRatio float64
+	CpuThreshold float64
+	Timeout      time.Duration
+	Interval     time.Duration
+	IdleTimeout  time.Duration
+	Factory      FactoryFn
+	Close        CloseFn
+}
 
 type ClientPool struct {
 	consulResolver *ConsulResolver
 	connPool       sync.Map
 	timeout        time.Duration
+	factory        FactoryFn
+	close          CloseFn
 }
 
 type ConnWithTs struct {
 	UpdateTime int64
-	Conn       *grpc.ClientConn
+	Conn       interface{}
 }
 
-func NewClientPool(address string, service string, myService string, interval time.Duration,
-	serviceRatio float64, cpuThreshold float64, zone string, timeout time.Duration) (*ClientPool, error) {
+func NewClientPoolByConfig(config *Config) (*ClientPool, error) {
 	resolver, err := NewConsulResolver(
-		address,
-		service,
-		myService,
-		interval,
-		serviceRatio,
-		cpuThreshold,
-		zone,
+		config.Address,
+		config.Service,
+		config.RegService,
+		config.Interval,
+		config.ServiceRatio,
+		config.CpuThreshold,
+		config.Zone,
 	)
 	if err != nil {
 		return nil, err
 	}
-	return NewClientPoolWithResolver(resolver, timeout)
+	return NewClientPoolWithResolver(resolver, config.Timeout, config.Factory, config.Close)
+
+	return nil, nil
+}
+func NewClientPool(address string, service string, myService string, interval time.Duration,
+	serviceRatio float64, cpuThreshold float64, zone string, timeout time.Duration,
+	factory FactoryFn, close CloseFn) (*ClientPool, error) {
+	config := &Config{
+		address,
+		service,
+		myService,
+		zone,
+		serviceRatio,
+		cpuThreshold,
+		timeout,
+		interval,
+		interval,
+		factory,
+		close,
+	}
+	return NewClientPoolByConfig(config)
 }
 
-func NewClientPoolWithResolver(resolver *ConsulResolver, timeout time.Duration) (*ClientPool, error) {
+func NewClientPoolWithResolver(resolver *ConsulResolver, timeout time.Duration,
+	factory FactoryFn, close CloseFn) (*ClientPool, error) {
 	clientPool := &ClientPool{}
 	clientPool.consulResolver = resolver
 	clientPool.timeout = timeout
+	clientPool.factory = factory
+	clientPool.close = close
 	clientPool.InitPool()
 	return clientPool, nil
 }
@@ -70,10 +109,9 @@ func (pool *ClientPool) watch() {
 				if connWithTs, ok := val.(*ConnWithTs); ok {
 					if now-connWithTs.UpdateTime > 30 {
 						if connWithTs.Conn != nil {
-							connWithTs.Conn.Close()
+							pool.close(connWithTs.Conn)
 						}
 						pool.connPool.Delete(key)
-						
 					}
 				}
 				return true
@@ -82,7 +120,7 @@ func (pool *ClientPool) watch() {
 	}
 	return
 }
-func (pool *ClientPool) NewConnect() (*grpc.ClientConn, string, error) {
+func (pool *ClientPool) NewConnect() (interface{}, string, error) {
 	retry := 0
 	var err error
 	// new with retry
@@ -106,10 +144,10 @@ func (pool *ClientPool) NewConnect() (*grpc.ClientConn, string, error) {
 	return nil, "", err
 }
 
-func (pool *ClientPool) NewConnectWithAddr(addr string) (*grpc.ClientConn, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), pool.timeout)
+func (pool *ClientPool) NewConnectWithAddr(addr string) (interface{}, error) {
+	_, cancel := context.WithTimeout(context.Background(), pool.timeout)
 	defer cancel()
-	conn, err := grpc.DialContext(ctx, addr, grpc.WithBlock(), grpc.WithInsecure())
+	conn, err := pool.factory(addr)
 	return conn, err
 
 }
@@ -122,7 +160,7 @@ func (pool *ClientPool) getNodeAddr() (string, error) {
 	return node.Address, nil
 }
 
-func (pool *ClientPool) Get() (*grpc.ClientConn, error) {
+func (pool *ClientPool) Get() (interface{}, error) {
 	var err error
 	addr, err := pool.getNodeAddr()
 	if err != nil {
@@ -135,26 +173,24 @@ func (pool *ClientPool) Get() (*grpc.ClientConn, error) {
 		connWithTs.UpdateTime = time.Now().Unix()
 		return connWithTs.Conn, nil
 	}
-
-	var conn *grpc.ClientConn
-
 	// 2nd: use the picked address for new connection
-	conn, err = pool.NewConnectWithAddr(addr)
-	if err != nil {
+	conn, err2 := pool.NewConnectWithAddr(addr)
+	if err2 != nil {
 		// 3rd: create a new connection
-		conn, addr, err = pool.NewConnect()
+		conn, addr, err2 = pool.NewConnect()
 	}
 
 	// use load or store for repeated write
 	val, loaded := pool.connPool.LoadOrStore(addr, &ConnWithTs{time.Now().Unix(), conn})
 
 	if loaded {
-		conn.Close()
+		pool.close(conn)
 	}
 
 	connWithTs := val.(*ConnWithTs)
 	return connWithTs.Conn, nil
 }
+
 /*
 // delete conn from pool when error
 func (pool *ClientPool) DropConnByAddr(addr string) {

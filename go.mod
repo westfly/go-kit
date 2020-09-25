@@ -1,6 +1,6 @@
-module github.com/bj-wangjia/go-kit
+module github.com/westfly/go-kit
 
-go 1.12
+go 1.13
 
 require (
 	github.com/StackExchange/wmi v0.0.0-20190523213315-cbe66965904d // indirect
@@ -8,4 +8,5 @@ require (
 	github.com/hashicorp/consul/api v1.3.0
 	github.com/shirou/gopsutil v2.19.10+incompatible
 	github.com/sirupsen/logrus v1.4.2
+	google.golang.org/grpc v1.32.0
 )
